@@ -1,14 +1,11 @@
 import { debug as createDebugLogger } from 'debug'
-// eslint-disable-next-line implicit-dependencies/no-implicit
-import type { LevelUp } from 'levelup'
 import { Block, BlockHeader } from '@ethereumjs/block'
-import Common, { ConsensusAlgorithm } from '@ethereumjs/common'
+import { ConsensusAlgorithm } from '@ethereumjs/common'
 import { Address, rlp, bigIntToBuffer, bufferToBigInt } from 'ethereumjs-util'
-import Blockchain from '../index'
-import { DBManager } from '../db/manager'
+import Blockchain from '..'
+import { Consensus, ConsensusOptions } from './interface'
 import { DBOp } from '../db/helpers'
 import { DBTarget } from '../db/operation'
-import { Consensus } from './interface'
 
 const debug = createDebugLogger('blockchain:clique')
 
@@ -34,10 +31,6 @@ export const CLIQUE_NONCE_DROP = Buffer.alloc(8)
  */
 export class CliqueConsensus implements Consensus {
   blockchain: Blockchain
-  db: LevelUp
-  dbManager?: DBManager
-  _common?: Common
-  _validateConsensus?: boolean
 
   /**
    * Keep signer history data (signer states and votes)
@@ -86,18 +79,8 @@ export class CliqueConsensus implements Consensus {
    */
   public _cliqueLatestBlockSigners: CliqueLatestBlockSigners = []
 
-  constructor(
-    blockchain: Blockchain,
-    db: LevelUp,
-    dbManager?: DBManager,
-    _common?: Common,
-    _validateConsensus?: boolean
-  ) {
+  constructor({ blockchain }: ConsensusOptions) {
     this.blockchain = blockchain
-    this.db = db
-    this.dbManager = dbManager
-    this._common = _common
-    this._validateConsensus = _validateConsensus ?? true
   }
 
   async setup(): Promise<void> {
@@ -112,14 +95,12 @@ export class CliqueConsensus implements Consensus {
 
   async validate(block: Block): Promise<void> {
     const { header } = block
-    if (this._validateConsensus) {
-      const valid = header.cliqueVerifySignature(this.cliqueActiveSigners())
-      if (!valid) {
-        throw new Error('invalid PoA block signature (clique)')
-      }
-      if (this.cliqueCheckRecentlySigned(header)) {
-        throw new Error('recently signed')
-      }
+    const valid = header.cliqueVerifySignature(this.cliqueActiveSigners())
+    if (!valid) {
+      throw new Error('invalid PoA block signature (clique)')
+    }
+    if (this.cliqueCheckRecentlySigned(header)) {
+      throw new Error('recently signed')
     }
 
     // validate checkpoint signers towards active signers on epoch transition blocks
@@ -205,7 +186,7 @@ export class CliqueConsensus implements Consensus {
     ])
     dbOps.push(DBOp.set(DBTarget.CliqueSignerStates, rlp.encode(formatted)))
 
-    await this.dbManager!.batch(dbOps)
+    await this.blockchain.dbManager.batch(dbOps)
     // Output active signers for debugging purposes
     let i = 0
     for (const signer of this.cliqueActiveSigners()) {
@@ -232,7 +213,7 @@ export class CliqueConsensus implements Consensus {
       for (let round = 1; round <= 2; round++) {
         // See if there is a new majority consensus to update the signer list
         const lastEpochBlockNumber =
-          header.number - (header.number % BigInt(this._common!.consensusConfig().epoch))
+          header.number - (header.number % BigInt(this.blockchain._common.consensusConfig().epoch))
         const limit = this.cliqueSignerLimit()
         let activeSigners = this.cliqueActiveSigners()
         let consensus = false
@@ -341,7 +322,8 @@ export class CliqueConsensus implements Consensus {
     const lastBlockNumber = blockSigners[blockSigners.length - 1]?.[0]
     if (lastBlockNumber) {
       const lastEpochBlockNumber =
-        lastBlockNumber - (lastBlockNumber % BigInt(this._common!.consensusConfig().epoch))
+        lastBlockNumber -
+        (lastBlockNumber % BigInt(this.blockchain._common.consensusConfig().epoch))
       const blockLimit = lastEpochBlockNumber - BigInt(limit)
       this._cliqueLatestVotes = this._cliqueLatestVotes.filter((state) => state[0] >= blockLimit)
     }
@@ -354,7 +336,7 @@ export class CliqueConsensus implements Consensus {
     ])
     dbOps.push(DBOp.set(DBTarget.CliqueVotes, rlp.encode(formatted)))
 
-    await this.dbManager!.batch(dbOps)
+    await this.blockchain.dbManager.batch(dbOps)
   }
 
   /**
@@ -371,7 +353,7 @@ export class CliqueConsensus implements Consensus {
   }
 
   private _requireClique() {
-    if (this._common!.consensusAlgorithm() !== ConsensusAlgorithm.Clique) {
+    if (this.blockchain._common!.consensusAlgorithm() !== ConsensusAlgorithm.Clique) {
       throw new Error('Function call only supported for clique PoA networks')
     }
   }
@@ -465,7 +447,7 @@ export class CliqueConsensus implements Consensus {
     ])
     dbOps.push(DBOp.set(DBTarget.CliqueBlockSigners, rlp.encode(formatted)))
 
-    await this.dbManager!.batch(dbOps)
+    await this.blockchain.dbManager.batch(dbOps)
   }
 
   /**
@@ -474,7 +456,7 @@ export class CliqueConsensus implements Consensus {
    */
   private async getCliqueLatestSignerStates(): Promise<CliqueLatestSignerStates> {
     try {
-      const signerStates = await this.dbManager!.get(DBTarget.CliqueSignerStates)
+      const signerStates = await this.blockchain.dbManager.get(DBTarget.CliqueSignerStates)
       const states = (<any>rlp.decode(signerStates)) as [Buffer, Buffer[]]
       return states.map((state) => {
         const blockNum = bufferToBigInt(state[0] as Buffer)
@@ -495,7 +477,7 @@ export class CliqueConsensus implements Consensus {
    */
   private async getCliqueLatestVotes(): Promise<CliqueLatestVotes> {
     try {
-      const signerVotes = await this.dbManager!.get(DBTarget.CliqueVotes)
+      const signerVotes = await this.blockchain.dbManager.get(DBTarget.CliqueVotes)
       const votes = (<any>rlp.decode(signerVotes)) as [Buffer, [Buffer, Buffer, Buffer]]
       return votes.map((vote) => {
         const blockNum = bufferToBigInt(vote[0] as Buffer)
@@ -518,7 +500,7 @@ export class CliqueConsensus implements Consensus {
    */
   private async getCliqueLatestBlockSigners(): Promise<CliqueLatestBlockSigners> {
     try {
-      const blockSigners = await this.dbManager!.get(DBTarget.CliqueBlockSigners)
+      const blockSigners = await this.blockchain.dbManager.get(DBTarget.CliqueBlockSigners)
       const signers = (<any>rlp.decode(blockSigners)) as [Buffer, Buffer][]
       return signers.map((s) => {
         const blockNum = bufferToBigInt(s[0] as Buffer)
@@ -538,7 +520,7 @@ export class CliqueConsensus implements Consensus {
    * @hidden
    */
   private async _getCanonicalHeader(number: bigint) {
-    const hash = await this.dbManager!.numberToHash(number)
+    const hash = await this.blockchain.dbManager.numberToHash(number)
     return this._getHeader(hash, number)
   }
 
@@ -549,9 +531,9 @@ export class CliqueConsensus implements Consensus {
    */
   private async _getHeader(hash: Buffer, number?: bigint) {
     if (!number) {
-      number = await this.dbManager!.hashToNumber(hash)
+      number = await this.blockchain.dbManager.hashToNumber(hash)
     }
-    return this.dbManager!.getHeader(hash, number)
+    return this.blockchain.dbManager.getHeader(hash, number)
   }
 
   /**

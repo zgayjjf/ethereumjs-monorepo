@@ -1,4 +1,5 @@
 import { Block, BlockHeader } from '@ethereumjs/block'
+import Blockchain from '..'
 
 /**
  * Interface that a consensus class needs to implement.
@@ -28,4 +29,11 @@ export interface Consensus {
    * @param ancientHeaders array of ancestor block headers (optional)
    */
   newBlock(block: Block, commonAncestor: BlockHeader, ancientHeaders?: BlockHeader[]): Promise<void>
+}
+
+/**
+ * Options when initializing a class that implements the Consensus interface.
+ */
+export interface ConsensusOptions {
+  blockchain: Blockchain
 }

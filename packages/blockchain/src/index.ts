@@ -108,19 +108,13 @@ export interface BlockchainOptions {
    * provided from the `common` will be used.
    */
   genesisBlock?: Block
-
-  /**
-   * Optional consensus algorithm. If not provided, this will default to the
-   * consensus algorithm set in the {@link Common} instance.
-   */
-  consensus?: ConsensusAlgorithm
 }
 
 /**
  * This class stores and interacts with blocks.
  */
 export default class Blockchain implements BlockchainInterface {
-  consensus: Consensus | CasperConsensus | CliqueConsensus | EthashConsensus
+  consensus: Consensus
   db: LevelUp
   dbManager: DBManager
 
@@ -147,7 +141,7 @@ export default class Blockchain implements BlockchainInterface {
   protected _isInitialized = false
   private _lock: Semaphore
 
-  private _common: Common
+  _common: Common
   private _hardforkByHeadBlockNumber: boolean
   private readonly _validateConsensus: boolean
   private readonly _validateBlocks: boolean
@@ -219,29 +213,14 @@ export default class Blockchain implements BlockchainInterface {
     this.db = opts.db ? opts.db : level()
     this.dbManager = new DBManager(this.db, this._common)
 
-    if (
-      opts.consensus === ConsensusAlgorithm.Casper ||
-      (!opts.consensus && this._common.consensusAlgorithm() === ConsensusAlgorithm.Casper)
-    ) {
-      this.consensus = new CasperConsensus(this.db)
-    } else if (
-      opts.consensus === ConsensusAlgorithm.Clique ||
-      (!opts.consensus && this._common.consensusAlgorithm() === ConsensusAlgorithm.Clique)
-    ) {
-      this.consensus = new CliqueConsensus(
-        this,
-        this.db,
-        this.dbManager,
-        this._common,
-        this._validateConsensus
-      )
-    } else if (
-      opts.consensus === ConsensusAlgorithm.Ethash ||
-      (!opts.consensus && this._common.consensusAlgorithm() === ConsensusAlgorithm.Ethash)
-    ) {
-      this.consensus = new EthashConsensus(this.db)
+    if (this._common.consensusAlgorithm() === ConsensusAlgorithm.Casper) {
+      this.consensus = new CasperConsensus({ blockchain: this })
+    } else if (this._common.consensusAlgorithm() === ConsensusAlgorithm.Clique) {
+      this.consensus = new CliqueConsensus({ blockchain: this })
+    } else if (this._common.consensusAlgorithm() === ConsensusAlgorithm.Ethash) {
+      this.consensus = new EthashConsensus({ blockchain: this })
     } else {
-      throw new Error('Unable to initialize consensus class')
+      throw new Error(`consensus algorithm ${this._common.consensusAlgorithm()} not supported`)
     }
 
     if (this._validateConsensus) {

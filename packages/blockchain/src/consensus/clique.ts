@@ -129,10 +129,10 @@ export class CliqueConsensus implements Consensus {
     }
   }
 
-  async newBlock(block: Block, commonAncestor: BlockHeader): Promise<void> {
+  async newBlock(block: Block, commonAncestor: BlockHeader | undefined): Promise<void> {
     // Clique: update signer votes and state
     const { header } = block
-    const commonAncestorNumber = commonAncestor.number
+    const commonAncestorNumber = commonAncestor?.number
     if (commonAncestorNumber !== undefined) {
       await this._cliqueDeleteSnapshots(commonAncestorNumber! + BigInt(1))
       for (

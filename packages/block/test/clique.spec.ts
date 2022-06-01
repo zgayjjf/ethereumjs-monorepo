@@ -86,7 +86,10 @@ tape('[Header]: Clique PoA Functionality', function (t) {
     st.ok(header.cliqueVerifySignature([A.address]), 'should verify signature')
     st.ok(header.cliqueSigner().equals(A.address), 'should recover the correct signer address')
 
-    header = BlockHeader.fromHeaderData({}, { common })
+    // TODO: fix this test
+    // passing in cliqueSigner is required for the header to initialize (i.e. to pass consensus validation)...
+    // but then that means header.cliqueSigner() is necessarily not zero address?
+    header = BlockHeader.fromHeaderData({}, { common, cliqueSigner })
     st.ok(
       header.cliqueSigner().equals(Address.zero()),
       'should return zero address on default block'

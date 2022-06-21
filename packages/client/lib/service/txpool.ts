@@ -1,4 +1,4 @@
-import Heap from 'qheap'
+const Heap = require('qheap')
 import {
   AccessListEIP2930Transaction,
   Capability,
@@ -656,7 +656,7 @@ export class TxPool {
       byNonce.set(address, txsSortedByNonce)
     }
     // Initialize a price based heap with the head transactions
-    const byPrice = new Heap<TypedTransaction>({
+    const byPrice = new Heap({
       comparBefore: (a: TypedTransaction, b: TypedTransaction) =>
         this.normalizedGasPrice(b, baseFee) - this.normalizedGasPrice(a, baseFee) < BigInt(0),
     })

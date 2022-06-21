@@ -1,6 +1,6 @@
 import { debug as createDebugLogger, Debugger } from 'debug'
 import { Readable, Writable } from 'stream'
-import Heap from 'qheap'
+const Heap = require('qheap')
 import { PeerPool } from '../../net/peerpool'
 import { Peer } from '../../net/peer'
 import { Config } from '../../config'
@@ -49,8 +49,8 @@ export abstract class Fetcher<JobTask, JobResult, StorageItem> extends Readable 
   protected interval: number
   protected banTime: number
   protected maxQueue: number
-  protected in: Heap<Job<JobTask, JobResult, StorageItem>>
-  protected out: Heap<Job<JobTask, JobResult, StorageItem>>
+  protected in: any
+  protected out: any
   protected total: number
   protected processed: number // number of processed tasks, awaiting the write job
   protected finished: number // number of tasks which are both processed and also finished writing

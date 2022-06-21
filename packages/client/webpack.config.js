@@ -56,6 +56,7 @@ module.exports = {
       net: false, // used by: rlpxpeer
       os: require.resolve('os-browserify/browser'), // used by: bin/cli.ts, web3_clientVersion rpc
       path: false, // used by: bin/cli.ts
+      qheap: require.resolve('qheap'),
       stream: require.resolve('stream-browserify'), // used by: fetcher
       tls: false, // used by: jayson
       zlib: false, // used by: body-parser

@@ -27,7 +27,7 @@ import { VmState } from '../src/eei/vmState'
 
 export function dumpState(state: any, cb: Function) {
   function readAccounts(state: any) {
-    return new Promise((resolve) => {
+    return new Promise((res) => {
       const accounts: Account[] = []
       const rs = state.createReadStream()
       rs.on('data', function (data: any) {
@@ -36,7 +36,7 @@ export function dumpState(state: any, cb: Function) {
         accounts.push(account)
       })
       rs.on('end', function () {
-        resolve(accounts)
+        res(accounts)
       })
     })
   }

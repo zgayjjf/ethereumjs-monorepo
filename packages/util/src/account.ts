@@ -42,7 +42,7 @@ export class Account {
     )
   }
 
-  public static fromRlpSerializedAccount(serialized: Buffer) {
+  public static from_RlpSerializedAccount(serialized: Buffer) {
     const values = arrToBufArr(RLP.decode(Uint8Array.from(serialized)) as Uint8Array[]) as Buffer[]
 
     if (!Array.isArray(values)) {

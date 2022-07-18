@@ -25,7 +25,7 @@ import {
 import { RLP } from 'rlp'
 import { VmState } from '../src/eei/vmState'
 
-export function dumpState(state: any, cb: Function) {
+export function dump_State(state: any, cb: Function) {
   function readAccounts(state: any) {
     return new Promise((res) => {
       const accounts: Account[] = []

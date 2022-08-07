@@ -8,7 +8,7 @@ import { PeerPool } from '../net/peerpool'
 import { FlowControl } from '../net/protocol'
 import { Event } from '../types'
 import { short } from '../util'
-import { BlockFetcher, HeaderFetcher, ReverseBlockFetcher } from './fetcher'
+import { BlockFetcher, HeaderFetcher, ReverseBlockFetcher, AccountFetcher } from './fetcher'
 
 export interface SynchronizerOptions {
   /* Config */

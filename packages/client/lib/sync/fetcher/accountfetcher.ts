@@ -1,8 +1,8 @@
-import { Fetcher, FetcherOptions } from './fetcher'
 import { Account } from '@ethereumjs/util'
+import { Peer } from '../../net/peer'
+import { Fetcher, FetcherOptions } from './fetcher'
 // import { Chain } from '../../blockchain'
 import { Job } from './types'
-import { Peer } from '../../net/peer'
 
 export interface AccountFetcherOptions extends FetcherOptions {
 	/** Root hash of the account trie to serve */

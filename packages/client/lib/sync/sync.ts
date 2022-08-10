@@ -40,7 +40,11 @@ export abstract class Synchronizer {
   protected interval: number
   protected forceSync: boolean
 
+<<<<<<< HEAD
   public fetcher: AccountFetcher | BlockFetcher | HeaderFetcher | ReverseBlockFetcher | null
+=======
+  public _fetcher: AccountFetcher | BlockFetcher | HeaderFetcher | ReverseBlockFetcher | null
+>>>>>>> 9a56af07a7c632f3f0cae984a5c22ac94b86d724
   public opened: boolean
   public running: boolean
   public startingBlock: bigint
@@ -57,7 +61,7 @@ export abstract class Synchronizer {
 
     this.pool = options.pool
     this.chain = options.chain
-    this.fetcher = null
+    this._fetcher = null
     this.flow = options.flow ?? new FlowControl()
     this.interval = options.interval ?? 1000
     this.opened = false
@@ -81,6 +85,14 @@ export abstract class Synchronizer {
    */
   get type() {
     return 'sync'
+  }
+
+  get fetcher(): AccountFetcher | BlockFetcher | HeaderFetcher | ReverseBlockFetcher | null{
+    return this._fetcher;
+  }
+
+  set fetcher(fetcher: AccountFetcher | BlockFetcher | HeaderFetcher | ReverseBlockFetcher | null){
+    this._fetcher = fetcher;
   }
 
   /**
@@ -179,8 +191,8 @@ export abstract class Synchronizer {
       }
       this.config.events.once(Event.SYNC_SYNCHRONIZED, resolveSync)
       try {
-        if (this.fetcher) {
-          await this.fetcher.fetch()
+        if (this._fetcher) {
+          await this._fetcher.fetch()
         }
         this.config.logger.debug(`Fetcher finished fetching...`)
         resolveSync()
@@ -198,10 +210,10 @@ export abstract class Synchronizer {
    * Clears and removes the fetcher.
    */
   clearFetcher() {
-    if (this.fetcher) {
-      this.fetcher.clear()
-      this.fetcher.destroy()
-      this.fetcher = null
+    if (this._fetcher) {
+      this._fetcher.clear()
+      this._fetcher.destroy()
+      this._fetcher = null
     }
   }
 

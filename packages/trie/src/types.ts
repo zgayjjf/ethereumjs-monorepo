@@ -44,6 +44,13 @@ export interface TrieOpts {
    * Store the root inside the database after every `write` operation
    */
   persistRoot?: boolean
+
+  /**
+   * Flag to prune the trie. Only possible on a normal Trie. When this is set to `true`,
+   * each time a value is overridden, then the (intermediate) nodes which are now not
+   * reachable anymore will be pruned (deleted) from the trie
+   */
+  pruneTrie?: boolean
 }
 
 export type BatchDBOp = PutBatch | DelBatch

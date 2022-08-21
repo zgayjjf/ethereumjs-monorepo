@@ -47,6 +47,7 @@ export class Trie {
   private _hash: HashFunc
   private _hashLen: number
   protected _persistRoot: boolean
+  private _pruneTrie: boolean
 
   /**
    * Create a new trie
@@ -59,8 +60,12 @@ export class Trie {
     this.EMPTY_TRIE_ROOT = this.hash(RLP_EMPTY_STRING)
     this._hashLen = this.EMPTY_TRIE_ROOT.length
     this._root = this.EMPTY_TRIE_ROOT
+    if (opts?.persistRoot === true) {
+      this._deleteFromDB = true
+    }
     this._deleteFromDB = opts?.deleteFromDB ?? false
     this._persistRoot = opts?.persistRoot ?? false
+    this._pruneTrie = opts?.pruneTrie ?? false
 
     if (opts?.root) {
       this.root = opts.root
@@ -160,8 +165,21 @@ export class Trie {
     } else {
       // First try to find the given key or its nearest node
       const { remaining, stack } = await this.findPath(key)
+      let ops: BatchDBOp[]
+      if (this._pruneTrie) {
+        const deleteHashes = stack.map((e) => this.hash(e.serialize()))
+        ops = <BatchDBOp[]>deleteHashes.map((e) => {
+          return {
+            type: 'del',
+            key: e,
+          }
+        })
+      }
       // then update
       await this._updateNode(key, value, remaining, stack)
+      if (this._pruneTrie) {
+        await this.db.batch(ops!)
+      }
     }
     await this.persistRoot()
     this.lock.signal()
@@ -176,8 +194,21 @@ export class Trie {
   async del(key: Buffer): Promise<void> {
     await this.lock.wait()
     const { node, stack } = await this.findPath(key)
+    let ops: BatchDBOp[]
+    if (this._pruneTrie) {
+      const deleteHashes = stack.map((e) => this.hash(e.serialize()))
+      ops = <BatchDBOp[]>deleteHashes.map((e) => {
+        return {
+          type: 'del',
+          key: e,
+        }
+      })
+    }
     if (node) {
       await this._deleteNode(key, stack)
+    }
+    if (this._pruneTrie) {
+      await this.db.batch(ops!)
     }
     await this.persistRoot()
     this.lock.signal()
@@ -743,6 +774,7 @@ export class Trie {
       root: this.root,
       deleteFromDB: this._deleteFromDB,
       persistRoot: this._persistRoot,
+      pruneTrie: this._pruneTrie,
       hash: this._hash,
     })
   }

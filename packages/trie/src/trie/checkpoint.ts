@@ -13,6 +13,9 @@ export class CheckpointTrie extends Trie {
 
   constructor(opts?: TrieOpts) {
     super(opts)
+    if (opts?.pruneTrie === true) {
+      throw new Error('It is not possible to set `pruneTrie` to `true` on a CheckpointTrie')
+    }
     this.dbStorage = opts?.db ?? new MapDB()
     this.db = new CheckpointDB(this.dbStorage)
   }

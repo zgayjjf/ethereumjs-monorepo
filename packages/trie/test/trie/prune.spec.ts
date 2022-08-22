@@ -1,6 +1,8 @@
 import * as tape from 'tape'
 
-import { Trie /*decodeNode*/ } from '../../src'
+import { BranchNode, ExtensionNode, Trie /*decodeNode*/ } from '../../src'
+
+const crypto = require('crypto')
 
 /*async function dumpTrieNodes(trie: any) {
   const trieDB = trie.db._database
@@ -9,6 +11,48 @@ import { Trie /*decodeNode*/ } from '../../src'
     console.log(decodeNode(trieDB.get(key)))
   }
 }*/
+
+// This method verifies if all keys in DB are reachable
+async function verifyPrunedTrie(trie: Trie, tester: tape.Test) {
+  const root = trie.root.toString('hex')
+  let ok = true
+  for (const dbkey of (<any>trie.db)._database.keys()) {
+    if (dbkey === root) {
+      continue
+    }
+
+    let found = false
+    try {
+      await trie.walkTrie(trie.root, async function (nodeRef, node, key, controller) {
+        if (found) {
+          return
+        }
+        if (node instanceof BranchNode) {
+          for (const item of node._branches) {
+            if (item && item.toString('hex') === dbkey) {
+              found = true
+              return
+            }
+          }
+          controller.allChildren(node, key)
+        }
+        if (node instanceof ExtensionNode) {
+          controller.allChildren(node, key)
+        }
+      })
+    } catch (e: any) {
+      tester.fail(`WalkTrie error: ${e.message}`)
+      ok = false
+    }
+    if (!found) {
+      tester.fail(`key not reachable in trie: ${dbkey}`)
+      ok = false
+    }
+  }
+  if (!ok) {
+    tester.fail('failed to verify trie')
+  }
+}
 
 tape('Pruned trie tests', function (tester) {
   const it = tester.test
@@ -55,45 +99,35 @@ tape('Pruned trie tests', function (tester) {
     st.end()
   })
 
-  // TODO
-
   it('should prune when keys are updated or deleted', async (st) => {
-    const trie = new Trie({ pruneTrie: true })
-    const keys: string[] = []
-    for (let i = 0; i < 100; i++) {
-      keys.push(i.toString(16))
-    }
-    const values: string[] = []
-    for (let i = 0; i < 1000; i++) {
-      let val = Math.floor(Math.random() * 16384)
-      while (values.includes(val.toString(16))) {
-        val = Math.floor(Math.random() * 16384)
+    for (let testID = 0; testID < 100; testID++) {
+      const trie = new Trie({ pruneTrie: true })
+      const keys: string[] = []
+      for (let i = 0; i < 100; i++) {
+        keys.push(crypto.randomBytes(32))
       }
-      values.push(val.toString(16))
-    }
-    for (let i = 0; i < keys.length; i++) {
-      const idx = i < 100 ? i : Math.floor(Math.random() * 100)
-      const key = keys[idx]
-      await trie.put(Buffer.from(key), Buffer.from(values[i]))
-    }
-    st.equals((<any>trie.db)._database.size, 20, 'DB size correct')
+      const values: string[] = []
+      for (let i = 0; i < 1000; i++) {
+        let val = Math.floor(Math.random() * 16384)
+        while (values.includes(val.toString(16))) {
+          val = Math.floor(Math.random() * 16384)
+        }
+        values.push(val.toString(16))
+      }
+      for (let i = 0; i < keys.length; i++) {
+        const idx = Math.floor(Math.random() * keys.length)
+        const key = keys[idx]
+        await trie.put(Buffer.from(key), Buffer.from(values[i]))
+      }
 
-    await trie.walkTrie(trie.root, (key) => {
-      st.deepEqual(key, trie.root, 'Walk tree passed')
-    })
+      await verifyPrunedTrie(trie, st)
 
-    for (let i = 0; i < 20; i++) {
-      await trie.del(Buffer.from(keys[i]))
+      for (let i = 0; i < 20; i++) {
+        const idx = Math.floor(Math.random() * keys.length)
+        await trie.del(Buffer.from(keys[idx]))
+      }
+
+      await verifyPrunedTrie(trie, st)
     }
-    st.equals((<any>trie.db)._database.size, 19, 'DB size correct')
-    try {
-      await trie.walkTrie(trie.root, (key) => {
-        st.deepEqual(key, trie.root, 'Walk tree passed')
-      })
-      st.pass('Prune test passed')
-    } catch {
-      st.fail('Prune test failed')
-    }
-    st.end()
   })
 })

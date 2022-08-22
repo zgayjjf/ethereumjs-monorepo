@@ -167,13 +167,18 @@ export class Trie {
       const { remaining, stack } = await this.findPath(key)
       let ops: BatchDBOp[]
       if (this._pruneTrie) {
-        const deleteHashes = stack.map((e) => this.hash(e.serialize()))
-        ops = <BatchDBOp[]>deleteHashes.map((e) => {
-          return {
-            type: 'del',
-            key: e,
-          }
-        })
+        const val = await this.get(key)
+        if (val === null || !val.equals(value)) {
+          const deleteHashes = stack.map((e) => this.hash(e.serialize()))
+          ops = <BatchDBOp[]>deleteHashes.map((e) => {
+            return {
+              type: 'del',
+              key: e,
+            }
+          })
+        } else {
+          ops = []
+        }
       }
       // then update
       await this._updateNode(key, value, remaining, stack)

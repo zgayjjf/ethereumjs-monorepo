@@ -199,8 +199,8 @@ export class Trie {
   async del(key: Buffer): Promise<void> {
     await this.lock.wait()
     const { node, stack } = await this.findPath(key)
-    let ops: BatchDBOp[]
-    if (this._pruneTrie) {
+    let ops: BatchDBOp[] = []
+    if (this._pruneTrie && node !== null) {
       const deleteHashes = stack.map((e) => this.hash(e.serialize()))
       ops = <BatchDBOp[]>deleteHashes.map((e) => {
         return {

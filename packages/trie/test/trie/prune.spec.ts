@@ -53,9 +53,7 @@ async function verifyPrunedTrie(trie: Trie, tester: tape.Test) {
       ok = false
     }
   }
-  if (!ok) {
-    tester.fail('failed to verify trie')
-  }
+  tester.ok(ok, 'all keys are reachable in the trie')
 }
 
 tape('Pruned trie tests', function (tester) {

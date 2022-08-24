@@ -37,6 +37,10 @@ async function verifyPrunedTrie(trie: Trie, tester: tape.Test) {
           controller.allChildren(node, key)
         }
         if (node instanceof ExtensionNode) {
+          if (node.value.toString('hex') === dbkey) {
+            found = true
+            return
+          }
           controller.allChildren(node, key)
         }
       })

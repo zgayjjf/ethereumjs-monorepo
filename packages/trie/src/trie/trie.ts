@@ -165,19 +165,20 @@ export class Trie {
     } else {
       // First try to find the given key or its nearest node
       const { remaining, stack } = await this.findPath(key)
-      let ops: BatchDBOp[]
+      let ops: BatchDBOp[] = []
       if (this._pruneTrie) {
         const val = await this.get(key)
         if (val === null || !val.equals(value)) {
           const deleteHashes = stack.map((e) => this.hash(e.serialize()))
+          for (let i = 0; i < deleteHashes.length; i++) {
+            //console.log(deleteHashes[i].toString('hex'))
+          }
           ops = <BatchDBOp[]>deleteHashes.map((e) => {
             return {
               type: 'del',
               key: e,
             }
           })
-        } else {
-          ops = []
         }
       }
       // then update
@@ -208,12 +209,15 @@ export class Trie {
           key: e,
         }
       })
+      for (let i = 0; i < ops.length; i++) {
+        console.log('delkey', ops[i].key.toString('hex'))
+      }
     }
     if (node) {
       await this._deleteNode(key, stack)
     }
     if (this._pruneTrie) {
-      await this.db.batch(ops!)
+      await this.db.batch(ops)
     }
     await this.persistRoot()
     this.lock.signal()
@@ -453,6 +457,7 @@ export class Trie {
     ) => {
       // branchNode is the node ON the branch node not THE branch node
       if (isFalsy(parentNode) || parentNode instanceof BranchNode) {
+        console.log('option 1')
         // branch->?
         if (isTruthy(parentNode)) {
           stack.push(parentNode)
@@ -596,6 +601,17 @@ export class Trie {
     if (lastRoot) {
       this.root = lastRoot
     }
+
+    console.log('SAVE')
+    for (let i = 0; i < opStack.length; i++) {
+      const item = opStack[i]
+      console.log('dokey', item.type, opStack[i].key.toString('hex'))
+      if (item.type === 'put') {
+        console.log('val', item.value.toString('hex'))
+        console.log(decodeNode(item.value))
+      }
+    }
+    console.log('DONE')
 
     await this.db.batch(opStack)
     await this.persistRoot()

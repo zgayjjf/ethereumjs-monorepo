@@ -1,8 +1,27 @@
+import { arrToBufArr } from '@ethereumjs/util'
+import { keccak256 } from 'ethereum-cryptography/keccak'
 import * as tape from 'tape'
 
 import { BranchNode, ExtensionNode, Trie /*decodeNode*/ } from '../../src'
+import { isTerminator } from '../../src/util/hex'
 
 const crypto = require('crypto')
+
+function mulberry32(a: any) {
+  return function () {
+    var t = (a += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const _rand = mulberry32(1353502818)
+const rand = function () {
+  const x = _rand()
+  const buf = Buffer.from(x.toString())
+  return arrToBufArr(keccak256(buf))
+}
 
 /*async function dumpTrieNodes(trie: any) {
   const trieDB = trie.db._database
@@ -13,7 +32,7 @@ const crypto = require('crypto')
 }*/
 
 // This method verifies if all keys in DB are reachable
-async function verifyPrunedTrie(trie: Trie, tester: tape.Test) {
+async function verifyPrunedTrie(trie: Trie, tester: tape.Test, unprunedTrie: Trie) {
   const root = trie.root.toString('hex')
   let ok = true
   for (const dbkey of (<any>trie.db)._database.keys()) {
@@ -53,7 +72,9 @@ async function verifyPrunedTrie(trie: Trie, tester: tape.Test) {
       ok = false
     }
   }
-  tester.ok(ok, 'all keys are reachable in the trie')
+  if (!ok) {
+    tester.fail('failed to verify trie')
+  }
 }
 
 tape('Pruned trie tests', function (tester) {
@@ -104,32 +125,57 @@ tape('Pruned trie tests', function (tester) {
   it('should prune when keys are updated or deleted', async (st) => {
     for (let testID = 0; testID < 1; testID++) {
       const trie = new Trie({ pruneTrie: true })
-      const keys: string[] = []
+      const unpruned = new Trie()
+      const keys: Buffer[] = []
       for (let i = 0; i < 100; i++) {
-        keys.push(crypto.randomBytes(32))
+        keys.push(rand())
       }
       const values: string[] = []
       for (let i = 0; i < 1000; i++) {
-        let val = Math.floor(Math.random() * 16384)
+        let val = Math.floor(_rand() * 16384)
         while (values.includes(val.toString(16))) {
-          val = Math.floor(Math.random() * 16384)
+          val = Math.floor(_rand() * 16384)
         }
         values.push(val.toString(16))
       }
       for (let i = 0; i < keys.length; i++) {
-        const idx = Math.floor(Math.random() * keys.length)
+        console.log('put ' + i)
+        const idx = Math.floor(_rand() * keys.length)
         const key = keys[idx]
+        console.log('pkey', key.toString('hex'))
         await trie.put(Buffer.from(key), Buffer.from(values[i]))
+        //await unpruned.put(Buffer.from(key), Buffer.from(values[i]))
+        if (i === 62) {
+          break
+        }
+        if (
+          await trie.db.get(
+            Buffer.from('b8a26708addba60814910d1cfbefe217b478a546e587d66267c9520eae3641ed', 'hex')
+          )
+        ) {
+          console.log(i)
+          console.log('IN')
+          const x = Buffer.from(key)
+          const y = Buffer.from(values[i])
+          console.log('key', x.toString('hex'))
+          console.log('val', y.toString('hex'))
+          console.log('root', trie.root.toString('hex'))
+          break
+        }
       }
 
-      await verifyPrunedTrie(trie, st)
+      //await verifyPrunedTrie(trie, st, unpruned)
 
-      for (let i = 0; i < 20; i++) {
-        const idx = Math.floor(Math.random() * keys.length)
+      console.log('!!DELETE')
+      for (let i = 0; i < 1; i++) {
+        const idx = Math.floor(_rand() * keys.length)
+        console.log('delme:', keys[idx].toString('hex'))
         await trie.del(Buffer.from(keys[idx]))
+        await unpruned.del(Buffer.from(keys[idx]))
       }
+      console.log('!!DONE')
 
-      await verifyPrunedTrie(trie, st)
+      await verifyPrunedTrie(trie, st, unpruned)
     }
   })
 })

@@ -1,5 +1,8 @@
 import { AccountFetcher } from './fetcher'
 import { Synchronizer } from './sync'
+// import { Trie } from '@ethereumjs/trie'
+// import { LevelDB } from '../execution/level'
+import { DefaultStateManager } from '@ethereumjs/statemanager'
 
 import type { Peer } from '../net/peer/peer'
 import type { SynchronizerOptions } from './sync'
@@ -8,8 +11,15 @@ interface SnapSynchronizerOptions extends SynchronizerOptions {}
 
 export class SnapSynchronizer extends Synchronizer {
   public running = false
+
+  // accountTrie: Trie
+  stateManager: DefaultStateManager // is the data for the backing stores persisted anywhere by default?
+
   constructor(options: SnapSynchronizerOptions) {
     super(options)
+
+    // this.accountTrie = new Trie({ db: new LevelDB() })
+    this.stateManager = new DefaultStateManager()
   }
 
   /**
@@ -94,13 +104,17 @@ export class SnapSynchronizer extends Synchronizer {
       )
     }
 
+    // FETCH PHASE
     this.fetcher = new AccountFetcher({
       config: this.config,
       pool: this.pool,
       root: stateRoot,
+      stateManager: this.stateManager,
       // This needs to be determined from the current state of the MPT dump
-      first: BigInt(1),
+      first: BigInt(1), // why isn't this defaulting to 0?
     })
+
+    // HEAL PHASE
 
     return true
   }

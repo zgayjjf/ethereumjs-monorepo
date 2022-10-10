@@ -1,5 +1,13 @@
 import { Trie } from '@ethereumjs/trie'
-import { accountBodyToRLP, bigIntToBuffer, bufferToBigInt, setLengthLeft } from '@ethereumjs/util'
+import {
+  Account,
+  Address,
+  accountBodyToRLP,
+  bigIntToBuffer,
+  bufferToBigInt,
+  setLengthLeft,
+  bufferToHex,
+} from '@ethereumjs/util'
 
 import { LevelDB } from '../../execution/level'
 import { short } from '../../util'
@@ -10,6 +18,7 @@ import type { Peer } from '../../net/peer'
 import type { AccountData } from '../../net/protocol/snapprotocol'
 import type { FetcherOptions } from './fetcher'
 import type { Job } from './types'
+import { DefaultStateManager } from '@ethereumjs/statemanager'
 
 type AccountDataResponse = AccountData[] & { completed?: boolean }
 
@@ -23,6 +32,9 @@ export interface AccountFetcherOptions extends FetcherOptions {
 
   /** The origin to start account fetcher from */
   first: bigint
+
+  // accountTrie: Trie
+  stateManager: DefaultStateManager
 
   /** Range to eventually fetch */
   count?: bigint
@@ -52,11 +64,18 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
   /** The range to eventually, by default should be set at BigInt(2) ** BigInt(256) + BigInt(1) - first */
   count: bigint
 
+  // accountTrie: CheckpointTrie
+
+  stateManager: DefaultStateManager
+
   /**
    * Create new block fetcher
    */
   constructor(options: AccountFetcherOptions) {
     super(options)
+
+    // this.accountTrie = options.accountTrie
+    this.stateManager = options.stateManager
 
     this.root = options.root
     this.first = options.first
@@ -198,6 +217,7 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     job: Job<JobTask, AccountData[], AccountData>,
     result: AccountDataResponse
   ): AccountData[] | undefined {
+    // TODO this seems like a good spot to enqueue tasks for storage and byte code fetching
     const fullResult = (job.partialResult ?? []).concat(result)
     job.partialResult = undefined
     if (result.completed === true) {
@@ -214,6 +234,33 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
    */
   async store(result: AccountData[]): Promise<void> {
     this.debug(`Stored ${result.length} accounts in account trie`)
+
+    try {
+      // store in statemanager passed in from calling class
+      for (const accountData of result) {
+        const { hash, body } = accountData
+        // this.accountTrie.put(hash, accountBodyToRLP(body))
+        // const address = new Address(hash)  // fails to instantiate - shouldn't be using stateManager, but could potentially use a modified version of it for the snap sync spec
+        // const account = Account.fromRlpSerializedAccount(accountBodyToRLP(body) as Buffer)
+        // this.stateManager.putAccount(address, account)
+      }
+
+      // when all of the accounts have been fetched, check if requested root matches stateRoot
+      if (this.count <= BigInt(0)) {
+        const stateRoot: Buffer = await this.stateManager.getStateRoot()
+        if (stateRoot.compare(this.root) === 0) {
+          this.debug(`Account fetch is finished and successful`)
+        } else {
+          this.debug(`Account fetch is finished and unsuccessful`)
+        }
+        this.debug(
+          `stateRoot current is ${bufferToHex(stateRoot)} - expected is ${bufferToHex(this.root)}`
+        )
+        process.exit()
+      }
+    } catch (err) {
+      throw Error(`Failed in fetcher store(): ${err}`)
+    }
   }
 
   /**

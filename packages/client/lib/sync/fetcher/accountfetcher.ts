@@ -132,18 +132,6 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     )
   }
 
-  private isMissingRightRange(
-    limit: Buffer,
-    { accounts, proof: _proof }: { accounts: AccountData[]; proof: Buffer[] }
-  ): boolean {
-    if (accounts.length > 0 && accounts[accounts.length - 1]?.hash.compare(limit) >= 0) {
-      return false
-    } else {
-      // TODO: Check if there is a proof of missing limit in state
-      return true
-    }
-  }
-
   private getOrigin(job: Job<JobTask, AccountData[], AccountData>): Buffer {
     const { task, partialResult } = job
     const { first } = task

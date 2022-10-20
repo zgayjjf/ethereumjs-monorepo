@@ -45,7 +45,7 @@ type GetStorageRangesOpts = {
   bytes: bigint
 }
 
-type StorageData = {
+export type StorageData = {
   hash: Buffer
   body: Buffer
 }

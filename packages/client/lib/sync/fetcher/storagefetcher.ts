@@ -200,7 +200,6 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     job: Job<JobTask, StorageData[], StorageData>,
     result: StorageDataResponse
   ): StorageData[] | undefined {
-    // TODO this seems like a good spot to enqueue tasks for storage and byte code fetching
     const fullResult = (job.partialResult ?? []).concat(result)
     job.partialResult = undefined
     if (result.completed === true) {

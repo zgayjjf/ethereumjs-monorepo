@@ -215,7 +215,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
    * @param result fetch result
    */
   async store(result: StorageData[]): Promise<void> {
-    this.debug(`Stored ${result.length} accounts in account trie`)
+    this.debug(`Stored ${result.length} storage slots`)
   }
 
   /**

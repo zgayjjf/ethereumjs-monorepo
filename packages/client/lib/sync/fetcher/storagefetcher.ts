@@ -21,13 +21,13 @@ export interface StorageFetcherOptions extends FetcherOptions {
   /** Root hash of the account trie to serve */
   root: Buffer
 
-  /** Account hashes of the storage tries to serve */
+  /** Account hashes of the storage tries to serve - Currently only able to fetch a single account's storage */
   accounts: Buffer[]
 
-  /** Storage slot hash of the first to retrieve - ignored if multiple accounts are requested */
+  /** Storage slot hash of the first to retrieve - Ignored if multiple accounts are requested */
   first: bigint
 
-  /** Range to eventually fetch - ignored if multiple accounts are requested */
+  /** Range to eventually fetch - Ignored if multiple accounts are requested */
   count?: bigint
 
   /** Destroy fetcher once all tasks are done */
@@ -168,13 +168,16 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
       try {
         // verifyRangeProof will also verify validate there are no missed states between origin and
         // response data
-        const isMissingRightRange = await this.verifyRangeProof(this.root, origin, rangeResult)
+        const isMissingRightRange = await this.verifyRangeProof(this.root, origin, {
+          slots: rangeResult.slots[0],
+          proof: rangeResult.proof,
+        })
 
         // Check if there is any pending data to be synced to the right
         let completed: boolean
         if (isMissingRightRange) {
           this.debug(
-            `Peer ${peerInfo} returned missing right range Slot=${rangeResult.slots[
+            `Peer ${peerInfo} returned missing right range Slot=${rangeResult.slots[0][
               rangeResult.slots.length - 1
             ].hash.toString('hex')} limit=${limit.toString('hex')}`
           )
@@ -184,7 +187,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
         }
         return Object.assign([], rangeResult.slots, { completed })
       } catch (err) {
-        throw Error(`InvalidSlotRange: ${err}`)
+        throw Error(`InvalidStorageRange: ${err}`)
       }
     }
   }
@@ -299,7 +302,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     const stepBack = BigInt(0)
     const destroyFetcher =
       !(error.message as string).includes(`InvalidRangeProof`) &&
-      !(error.message as string).includes(`InvalidAccountRange`)
+      !(error.message as string).includes(`InvalidStorageRange`)
     const banPeer = true
     return { destroyFetcher, banPeer, stepBack }
   }

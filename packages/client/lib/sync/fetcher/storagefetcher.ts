@@ -24,10 +24,10 @@ export interface StorageFetcherOptions extends FetcherOptions {
   /** Account hashes of the storage tries to serve */
   accounts: Buffer[]
 
-  /** Storage slot hash of the first to retrieve */
+  /** Storage slot hash of the first to retrieve - ignored if multiple accounts are requested */
   first: bigint
 
-  /** Range to eventually fetch */
+  /** Range to eventually fetch - ignored if multiple accounts are requested */
   count?: bigint
 
   /** Destroy fetcher once all tasks are done */

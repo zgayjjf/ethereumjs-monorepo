@@ -7,6 +7,7 @@ import {
   bufferToBigInt,
   setLengthLeft,
   bufferToHex,
+  accountBodyFromSlim,
 } from '@ethereumjs/util'
 
 import { LevelDB } from '../../execution/level'
@@ -16,9 +17,10 @@ import { Fetcher } from './fetcher'
 
 import type { Peer } from '../../net/peer'
 import type { AccountData } from '../../net/protocol/snapprotocol'
-import type { FetcherOptions } from './fetcher'
+import type { FetcherOptions, StorageFetcher } from './fetcher'
 import type { Job } from './types'
 import { DefaultStateManager } from '@ethereumjs/statemanager'
+import { KECCAK256_NULL, KECCAK256_RLP } from './constants'
 
 type AccountDataResponse = AccountData[] & { completed?: boolean }
 
@@ -194,6 +196,17 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
         } else {
           completed = true
         }
+
+        // queue accounts that have a storage component to them for storage fetching
+        // TODO we need to check convertSlimBody setting here and convert accordingly
+        const emptyUint8Arr = new Uint8Array(0)
+        for (const accountData of rangeResult.accounts) {
+          const account = Account.fromAccountData(accountBodyFromSlim(accountData.body))
+          if (account.storageRoot === KECCAK256_RLP) {
+            // start storage fetcher
+          }
+        }
+
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {
         throw Error(`InvalidAccountRange: ${err}`)

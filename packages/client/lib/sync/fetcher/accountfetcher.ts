@@ -8,19 +8,19 @@ import {
   setLengthLeft,
   bufferToHex,
   accountBodyFromSlim,
+  KECCAK256_NULL,
+  KECCAK256_RLP,
 } from '@ethereumjs/util'
 
 import { LevelDB } from '../../execution/level'
 import { short } from '../../util'
 
-import { Fetcher } from './fetcher'
-
 import type { Peer } from '../../net/peer'
 import type { AccountData } from '../../net/protocol/snapprotocol'
-import type { FetcherOptions, StorageFetcher } from './fetcher'
 import type { Job } from './types'
+import { Fetcher, FetcherOptions } from './fetcher'
+import { StorageFetcher } from './storagefetcher'
 import { DefaultStateManager } from '@ethereumjs/statemanager'
-import { KECCAK256_NULL, KECCAK256_RLP } from './constants'
 
 type AccountDataResponse = AccountData[] & { completed?: boolean }
 
@@ -70,6 +70,8 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
   stateManager: DefaultStateManager
 
+  storageFetchers: any[]
+
   /**
    * Create new block fetcher
    */
@@ -79,6 +81,7 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     // this.accountTrie = options.accountTrie
     this.stateManager = options.stateManager
 
+    this.storageFetchers = []
     this.root = options.root
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
@@ -201,9 +204,19 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
         // TODO we need to check convertSlimBody setting here and convert accordingly
         const emptyUint8Arr = new Uint8Array(0)
         for (const accountData of rangeResult.accounts) {
-          const account = Account.fromAccountData(accountBodyFromSlim(accountData.body))
-          if (account.storageRoot === KECCAK256_RLP) {
+          const account = Account.fromAccountData(accountData.body as any)
+          this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
+          if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
             // start storage fetcher
+            this.storageFetchers.unshift(
+              new StorageFetcher({
+                config: this.config,
+                pool: this.pool,
+                root: this.root,
+                accounts: [accountData.hash],
+                first: BigInt(1),
+              })
+            )
           }
         }
 

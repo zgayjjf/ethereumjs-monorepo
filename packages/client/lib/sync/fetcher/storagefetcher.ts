@@ -150,6 +150,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     const origin = this.getOrigin(job)
     const limit = this.getLimit(job)
 
+    this.debug(`'dgb1: inside request function of storage fetcher`)
     const rangeResult = await peer!.snap!.getStorageRanges({
       root: this.root,
       accounts: this.accounts,
@@ -264,6 +265,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
   }
 
   nextTasks(): void {
+    this.debug('dbg2')
     if (this.in.length === 0 && this.count > BigInt(0)) {
       const fullJob = { task: { first: this.first, count: this.count } } as Job<
         JobTask,

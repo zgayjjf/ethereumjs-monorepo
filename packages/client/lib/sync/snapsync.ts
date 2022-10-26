@@ -7,6 +7,9 @@ import { DefaultStateManager } from '@ethereumjs/statemanager'
 import type { Peer } from '../net/peer/peer'
 import type { SynchronizerOptions } from './sync'
 
+import { StorageFetcher } from './fetcher/storagefetcher'
+import { keccak256 } from 'ethereum-cryptography/keccak'
+
 interface SnapSynchronizerOptions extends SynchronizerOptions {}
 
 export class SnapSynchronizer extends Synchronizer {
@@ -105,14 +108,30 @@ export class SnapSynchronizer extends Synchronizer {
     }
 
     // FETCH PHASE
-    this.fetcher = new AccountFetcher({
+    // this.fetcher = new AccountFetcher({
+    //   config: this.config,
+    //   pool: this.pool,
+    //   root: stateRoot,
+    //   stateManager: this.stateManager,
+    //   // This needs to be determined from the current state of the MPT dump
+    //   first: BigInt(1), // why isn't this defaulting to 0?
+    // })
+
+    // 0x9907Dd452706A9783e241D7b16e6AD0759AE051E
+    this.fetcher = new StorageFetcher({
       config: this.config,
       pool: this.pool,
       root: stateRoot,
-      stateManager: this.stateManager,
-      // This needs to be determined from the current state of the MPT dump
-      first: BigInt(1), // why isn't this defaulting to 0?
-    })
+      accounts: [
+        // Buffer.from(keccak256(
+        //   // new Uint8Array(
+        //     Buffer.from("9907Dd452706A9783e241D7b16e6AD0759AE051E", "hex")
+        //   // )
+        // ))
+        Buffer.from(''),
+      ],
+      first: BigInt(1),
+    }) as any
 
     // HEAL PHASE
 

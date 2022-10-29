@@ -70,8 +70,6 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
   stateManager: DefaultStateManager
 
-  storageFetchers: any[]
-
   /**
    * Create new block fetcher
    */
@@ -81,7 +79,6 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     // this.accountTrie = options.accountTrie
     this.stateManager = options.stateManager
 
-    this.storageFetchers = []
     this.root = options.root
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
@@ -202,23 +199,23 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
         // queue accounts that have a storage component to them for storage fetching
         // TODO we need to check convertSlimBody setting here and convert accordingly
-        const emptyUint8Arr = new Uint8Array(0)
-        for (const accountData of rangeResult.accounts) {
-          const account = Account.fromAccountData(accountData.body as any)
-          this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
-          if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
-            // start storage fetcher
-            this.storageFetchers.unshift(
-              new StorageFetcher({
-                config: this.config,
-                pool: this.pool,
-                root: this.root,
-                accounts: [accountData.hash],
-                first: BigInt(1),
-              })
-            )
-          }
-        }
+        // const emptyUint8Arr = new Uint8Array(0)
+        // for (const accountData of rangeResult.accounts) {
+        //   const account = Account.fromAccountData(accountData.body as any)
+        //   this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
+        //   if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
+        //     // start storage fetcher
+        //     this.storageFetchers.unshift(
+        //       new StorageFetcher({
+        //         config: this.config,
+        //         pool: this.pool,
+        //         root: this.root,
+        //         accounts: [accountData.hash],
+        //         first: BigInt(1),
+        //       })
+        //     )
+        //   }
+        // }
 
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {

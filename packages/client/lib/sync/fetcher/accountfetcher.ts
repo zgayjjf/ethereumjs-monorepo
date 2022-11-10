@@ -36,7 +36,7 @@ export interface AccountFetcherOptions extends FetcherOptions {
   first: bigint
 
   // accountTrie: Trie
-  stateManager: DefaultStateManager
+  // stateManager: DefaultStateManager
 
   /** Range to eventually fetch */
   count?: bigint
@@ -66,9 +66,11 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
   /** The range to eventually, by default should be set at BigInt(2) ** BigInt(256) + BigInt(1) - first */
   count: bigint
 
+  storageFetcher: StorageFetcher
+
   // accountTrie: CheckpointTrie
 
-  stateManager: DefaultStateManager
+  // stateManager: DefaultStateManager
 
   /**
    * Create new block fetcher
@@ -77,11 +79,21 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     super(options)
 
     // this.accountTrie = options.accountTrie
-    this.stateManager = options.stateManager
+    // this.stateManager = options.stateManager
 
     this.root = options.root
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
+
+    this.storageFetcher = new StorageFetcher({
+      config: this.config,
+      pool: this.pool,
+      root: this.root,
+      accounts: [],
+      first: BigInt(1),
+      destroyWhenDone: false,
+    })
+    this.storageFetcher.fetch()
 
     const fullJob = { task: { first: this.first, count: this.count } } as Job<
       JobTask,
@@ -199,23 +211,15 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
         // queue accounts that have a storage component to them for storage fetching
         // TODO we need to check convertSlimBody setting here and convert accordingly
-        // const emptyUint8Arr = new Uint8Array(0)
-        // for (const accountData of rangeResult.accounts) {
-        //   const account = Account.fromAccountData(accountData.body as any)
-        //   this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
-        //   if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
-        //     // start storage fetcher
-        //     this.storageFetchers.unshift(
-        //       new StorageFetcher({
-        //         config: this.config,
-        //         pool: this.pool,
-        //         root: this.root,
-        //         accounts: [accountData.hash],
-        //         first: BigInt(1),
-        //       })
-        //     )
-        //   }
-        // }
+        const emptyUint8Arr = new Uint8Array(0)
+        for (const accountData of rangeResult.accounts) {
+          const account = Account.fromAccountData(accountData.body as any)
+          this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
+          if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
+            // start storage fetcher
+            // this.storageFetcher. // TODO have to redesign task functions to be able to enqueue a single task here
+          }
+        }
 
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {
@@ -264,18 +268,18 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
       }
 
       // when all of the accounts have been fetched, check if requested root matches stateRoot
-      if (this.count <= BigInt(0)) {
-        const stateRoot: Buffer = await this.stateManager.getStateRoot()
-        if (stateRoot.compare(this.root) === 0) {
-          this.debug(`Account fetch is finished and successful`)
-        } else {
-          this.debug(`Account fetch is finished and unsuccessful`)
-        }
-        this.debug(
-          `stateRoot current is ${bufferToHex(stateRoot)} - expected is ${bufferToHex(this.root)}`
-        )
-        process.exit()
-      }
+      // if (this.count <= BigInt(0)) {
+      //   const stateRoot: Buffer = await this.stateManager.getStateRoot()
+      //   if (stateRoot.compare(this.root) === 0) {
+      //     this.debug(`Account fetch is finished and successful`)
+      //   } else {
+      //     this.debug(`Account fetch is finished and unsuccessful`)
+      //   }
+      //   this.debug(
+      //     `stateRoot current is ${bufferToHex(stateRoot)} - expected is ${bufferToHex(this.root)}`
+      //   )
+      //   process.exit()
+      // }
     } catch (err) {
       throw Error(`Failed in fetcher store(): ${err}`)
     }

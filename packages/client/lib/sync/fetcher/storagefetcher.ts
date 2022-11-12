@@ -35,6 +35,7 @@ export interface StorageFetcherOptions extends FetcherOptions {
 }
 
 export type JobTask = {
+  account: Buffer
   /** The origin to start storage fetcher from */
   first: bigint
   /** Range to eventually fetch */
@@ -68,19 +69,22 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
     this.accounts = options.accounts
 
-    const fullJob = { task: { first: this.first, count: this.count } } as Job<
-      JobTask,
-      StorageData[],
-      StorageData
-    >
-    const origin = this.getOrigin(fullJob)
-    const limit = this.getLimit(fullJob)
+    if (this.accounts.length > 0) {
+      const fullJob = { task: { first: this.first, count: this.count } } as Job<
+        JobTask,
+        StorageData[],
+        StorageData
+      >
+      const origin = this.getOrigin(fullJob)
+      const limit = this.getLimit(fullJob)
 
-    this.debug(
-      `Storage fetcher instantiated root=${short(this.root)} origin=${short(origin)} limit=${short(
-        limit
-      )} destroyWhenDone=${this.destroyWhenDone}`
-    )
+      this.debug(
+        `Storage fetcher instantiated root=${short(this.root)} origin=${short(
+          origin
+        )} limit=${short(limit)} destroyWhenDone=${this.destroyWhenDone}`
+      )
+    }
+    this.debug('Idle storage fetcher has been instantiated')
   }
 
   private async verifyRangeProof(
@@ -146,17 +150,20 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
   async request(
     job: Job<JobTask, StorageData[], StorageData>
   ): Promise<StorageDataResponse | undefined> {
-    const { peer } = job
+    const { task, peer } = job
     const origin = this.getOrigin(job)
     const limit = this.getLimit(job)
 
     this.debug(`'dgb1: inside request function of storage fetcher`)
     const rangeResult = await peer!.snap!.getStorageRanges({
       root: this.root,
-      accounts: this.accounts,
-      origin,
-      limit,
-      bytes: BigInt(this.config.maxRangeBytes),
+      accounts: [task.account],
+      origin: Buffer.from(
+        '0000000000000000000000000f00000000000000000000000000000000000000',
+        'hex'
+      ),
+      limit: Buffer.from('f000000000000000000000000f00000000000000000000000000000000000010', 'hex'),
+      bytes: BigInt(100000),
     })
 
     const peerInfo = `id=${peer?.id.slice(0, 8)} address=${peer?.address}`
@@ -223,6 +230,26 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
   }
 
   /**
+   * Create new tasks based on a provided list of block numbers.
+   *
+   * If numbers are sequential the request is created as bulk request.
+   *
+   * If there are no tasks in the fetcher and `min` is behind head,
+   * inserts the requests for the missing blocks first.
+   *
+   * @param numberList List of block numbers
+   * @param min Start block number
+   */
+  enqueueByAccountList(accountList: Buffer[]) {
+    this.accounts.push(...accountList)
+
+    this.debug(`Number of accounts added to fetcher queue: ${accountList.length}`)
+    if (this.in.length === 0) {
+      this.nextTasks()
+    }
+  }
+
+  /**
    * Generate list of tasks to fetch. Modifies `first` and `count` to indicate
    * remaining items apart from the tasks it pushes in the queue
    *
@@ -237,14 +264,17 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     let pushedCount = BigInt(0)
     const startedWith = first
 
+    // pop a single account that is to be requested
+    const accountRequested = this.accounts.shift()
+
     while (count >= BigInt(max) && tasks.length < maxTasks) {
-      tasks.push({ first, count: max })
+      tasks.push({ account: accountRequested!, first, count: max })
       first += BigInt(max)
       count -= BigInt(max)
       pushedCount += BigInt(max)
     }
     if (count > BigInt(0) && tasks.length < maxTasks) {
-      tasks.push({ first, count })
+      tasks.push({ account: accountRequested!, first, count })
       first += BigInt(count)
       pushedCount += count
       count = BigInt(0)
@@ -266,7 +296,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
 
   nextTasks(): void {
     this.debug('dbg2')
-    if (this.in.length === 0 && this.count > BigInt(0)) {
+    if (this.accounts.length > 0 && this.in.length === 0 && this.count > BigInt(0)) {
       const fullJob = { task: { first: this.first, count: this.count } } as Job<
         JobTask,
         StorageData[],

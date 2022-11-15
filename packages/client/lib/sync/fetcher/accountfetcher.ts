@@ -211,15 +211,15 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
         // queue accounts that have a storage component to them for storage fetching
         // TODO we need to check convertSlimBody setting here and convert accordingly
-        const emptyUint8Arr = new Uint8Array(0)
+        const storageAccounts: Buffer[] = []
         for (const accountData of rangeResult.accounts) {
           const account = Account.fromAccountData(accountData.body as any)
-          this.debug(`dbg0: ${account.storageRoot.compare(KECCAK256_RLP)}`)
+          this.debug(`dbg30: ${account.storageRoot.compare(KECCAK256_RLP)}`)
           if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
-            // start storage fetcher
-            // this.storageFetcher. // TODO have to redesign task functions to be able to enqueue a single task here
+            storageAccounts.push(accountData.hash)
           }
         }
+        this.storageFetcher.enqueueByAccountList(storageAccounts) // TODO have to redesign task functions to be able to enqueue a single task here
 
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {

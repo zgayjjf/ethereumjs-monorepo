@@ -1,5 +1,11 @@
 import { Trie } from '@ethereumjs/trie'
-import { accountBodyToRLP, bigIntToBuffer, bufferToBigInt, setLengthLeft } from '@ethereumjs/util'
+import {
+  accountBodyToRLP,
+  bigIntToBuffer,
+  bufferToBigInt,
+  bufferToHex,
+  setLengthLeft,
+} from '@ethereumjs/util'
 
 import { LevelDB } from '../../execution/level'
 import { short } from '../../util'
@@ -83,8 +89,9 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
           origin
         )} limit=${short(limit)} destroyWhenDone=${this.destroyWhenDone}`
       )
+    } else if (this.accounts.length === 0) {
+      this.debug('Idle storage fetcher has been instantiated')
     }
-    this.debug('Idle storage fetcher has been instantiated')
   }
 
   private async verifyRangeProof(
@@ -92,35 +99,43 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     origin: Buffer,
     { slots, proof }: { slots: StorageData[]; proof: Buffer[] }
   ): Promise<boolean> {
-    this.debug(
-      `verifyRangeProof slots:${slots.length} first=${short(slots[0].hash)} last=${short(
-        slots[slots.length - 1].hash
-      )}`
-    )
+    try {
+      this.debug(
+        `verifyRangeProof slots:${slots.length} first=${short(slots[0].hash)} last=${short(
+          slots[slots.length - 1].hash
+        )}`
+      )
 
-    for (let i = 0; i < slots.length - 1; i++) {
-      // ensure the range is monotonically increasing
-      if (slots[i].hash.compare(slots[i + 1].hash) === 1) {
-        throw Error(
-          `Account hashes not monotonically increasing: ${i} ${slots[i].hash} vs ${i + 1} ${
-            slots[i + 1].hash
-          }`
-        )
+      for (let i = 0; i < slots.length - 1; i++) {
+        // ensure the range is monotonically increasing
+        if (slots[i].hash.compare(slots[i + 1].hash) === 1) {
+          throw Error(
+            `Account hashes not monotonically increasing: ${i} ${slots[i].hash} vs ${i + 1} ${
+              slots[i + 1].hash
+            }`
+          )
+        }
       }
-    }
 
-    const trie = new Trie({ db: new LevelDB() })
-    const keys = slots.map((slot: any) => slot.hash)
-    const values = slots.map((slot: any) => accountBodyToRLP(slot.body))
-    // convert the request to the right values
-    return await trie.verifyRangeProof(
-      stateRoot,
-      origin,
-      keys[keys.length - 1],
-      keys,
-      values,
-      <any>proof
-    )
+      const trie = new Trie({ db: new LevelDB() })
+      const keys = slots.map((slot: any) => slot.hash)
+      const values = slots.map((slot: any) => slot.body)
+      this.debug(JSON.stringify(keys))
+      this.debug(JSON.stringify(values))
+      this.debug(JSON.stringify(proof))
+      // convert the request to the right values
+      return await trie.verifyRangeProof(
+        stateRoot,
+        origin,
+        keys[keys.length - 1],
+        keys,
+        values,
+        <any>proof
+      )
+    } catch (err) {
+      this.debug(`verifyRangeProof failure: ${(err as any).stack}`)
+      throw Error((err as any).message)
+    }
   }
 
   private getOrigin(job: Job<JobTask, StorageData[], StorageData>): Buffer {
@@ -155,17 +170,28 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     const limit = this.getLimit(job)
 
     this.debug(`'dgb1: inside request function of storage fetcher`)
+    this.debug(`root is ${bufferToHex(this.root)}`)
+    this.debug(`account is ${bufferToHex(task.account)}`)
+    this.debug(`origin is ${bufferToHex(origin)}`)
+    this.debug(`limit is ${bufferToHex(limit)}`)
+
     const rangeResult = await peer!.snap!.getStorageRanges({
       root: this.root,
       accounts: [task.account],
-      origin: Buffer.from(
-        '0000000000000000000000000f00000000000000000000000000000000000000',
-        'hex'
-      ),
-      limit: Buffer.from('f000000000000000000000000f00000000000000000000000000000000000010', 'hex'),
+      origin,
+      limit,
       bytes: BigInt(100000),
     })
 
+    for (const slot of rangeResult.slots) {
+      this.debug(`length of slot array is ${slot.length}`)
+      this.debug(`hash of first returned slot is ${bufferToHex(slot[0].hash)}`)
+      this.debug(`body of first returned slot is ${bufferToHex(slot[0].body)}`)
+    }
+    this.debug(`length of proof array is ${rangeResult.proof.length}`)
+    for (const proof of rangeResult.proof) {
+      this.debug(`returned proof is ${bufferToHex(proof)}`)
+    }
     const peerInfo = `id=${peer?.id.slice(0, 8)} address=${peer?.address}`
 
     // eslint-disable-next-line eqeqeq
@@ -182,16 +208,28 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
         })
 
         // Check if there is any pending data to be synced to the right
+        this.debug('dbg10')
         let completed: boolean
         if (isMissingRightRange) {
+          this.debug('dbg11')
+
           this.debug(
             `Peer ${peerInfo} returned missing right range Slot=${rangeResult.slots[0][
               rangeResult.slots.length - 1
             ].hash.toString('hex')} limit=${limit.toString('hex')}`
           )
+          this.debug('dbg12')
+
           completed = false
         } else {
           completed = true
+          this.debug('dbg13')
+
+          const shift = this.accounts.shift()
+          console.log(shift)
+          console.log(this.accounts.length)
+          console.log(this.in.length)
+          this.debug('dbg14')
         }
         return Object.assign([], rangeResult.slots, { completed })
       } catch (err) {
@@ -264,8 +302,8 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     let pushedCount = BigInt(0)
     const startedWith = first
 
-    // pop a single account that is to be requested
-    const accountRequested = this.accounts.shift()
+    // track the first account and remove it when fetch is complete
+    const accountRequested = this.accounts[0]
 
     while (count >= BigInt(max) && tasks.length < maxTasks) {
       tasks.push({ account: accountRequested!, first, count: max })

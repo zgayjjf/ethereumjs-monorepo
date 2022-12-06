@@ -19,7 +19,7 @@ import type { Peer } from '../../net/peer'
 import type { AccountData } from '../../net/protocol/snapprotocol'
 import type { Job } from './types'
 import { Fetcher, FetcherOptions } from './fetcher'
-import { StorageFetcher } from './storagefetcher'
+import { StorageFetcher, StorageRequest } from './storagefetcher'
 import { DefaultStateManager } from '@ethereumjs/statemanager'
 
 type AccountDataResponse = AccountData[] & { completed?: boolean }
@@ -82,6 +82,7 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     // this.stateManager = options.stateManager
 
     this.root = options.root
+    console.log(`dbg32: ${options.first}`)
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
 
@@ -89,7 +90,7 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
       config: this.config,
       pool: this.pool,
       root: this.root,
-      accounts: [],
+      storageRequests: [],
       first: BigInt(1),
       destroyWhenDone: false,
     })
@@ -116,9 +117,9 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     { accounts, proof }: { accounts: AccountData[]; proof: Buffer[] }
   ): Promise<boolean> {
     this.debug(
-      `verifyRangeProof accounts:${accounts.length} first=${short(accounts[0].hash)} last=${short(
-        accounts[accounts.length - 1].hash
-      )}`
+      `verifyRangeProof accounts:${accounts.length} first=${bufferToHex(
+        accounts[0].hash
+      )} last=${short(accounts[accounts.length - 1].hash)}`
     )
 
     for (let i = 0; i < accounts.length - 1; i++) {
@@ -150,6 +151,8 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     const { task, partialResult } = job
     const { first } = task
     // Snap protocol will automatically pad it with 32 bytes left, so we don't need to worry
+    console.log(`dbg31: ${first}`)
+    console.log(`dbg31: ${bufferToHex(bigIntToBuffer(first))}`)
     const origin = partialResult
       ? bigIntToBuffer(bufferToBigInt(partialResult[partialResult.length - 1].hash) + BigInt(1))
       : bigIntToBuffer(first)
@@ -209,17 +212,25 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
           completed = true
         }
 
+        // also need storageRoot of account to be passed into storage fetcher
+
         // queue accounts that have a storage component to them for storage fetching
         // TODO we need to check convertSlimBody setting here and convert accordingly
-        const storageAccounts: Buffer[] = []
+        const storageAccounts: StorageRequest[] = []
         for (const accountData of rangeResult.accounts) {
           const account = Account.fromAccountData(accountData.body as any)
           this.debug(`dbg30: ${account.storageRoot.compare(KECCAK256_RLP)}`)
+          this.debug(`dbg30: ${bufferToHex(KECCAK256_RLP)}`)
+          this.debug(`dbg30: ${bufferToHex(account.storageRoot)}`)
+
           if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
-            storageAccounts.push(accountData.hash)
+            storageAccounts.push({
+              accountHash: accountData.hash,
+              storageRoot: account.storageRoot,
+            })
           }
         }
-        this.storageFetcher.enqueueByAccountList(storageAccounts) // TODO have to redesign task functions to be able to enqueue a single task here
+        this.storageFetcher.enqueueByStorageRequestList(storageAccounts) // TODO have to redesign task functions to be able to enqueue a single task here
 
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {

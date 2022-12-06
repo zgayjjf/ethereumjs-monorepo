@@ -19,6 +19,11 @@ import type { Job } from './types'
 
 type StorageDataResponse = StorageData[] & { completed?: boolean }
 
+export type StorageRequest = {
+  accountHash: Buffer
+  storageRoot: Buffer
+}
+
 /**
  * Implements an snap1 based storage fetcher
  * @memberof module:sync/fetcher
@@ -28,7 +33,7 @@ export interface StorageFetcherOptions extends FetcherOptions {
   root: Buffer
 
   /** Account hashes of the storage tries to serve - Currently only able to fetch a single account's storage */
-  accounts: Buffer[]
+  storageRequests: StorageRequest[]
 
   /** Storage slot hash of the first to retrieve - Ignored if multiple accounts are requested */
   first: bigint
@@ -41,7 +46,7 @@ export interface StorageFetcherOptions extends FetcherOptions {
 }
 
 export type JobTask = {
-  account: Buffer
+  storageRequests: StorageRequest
   /** The origin to start storage fetcher from */
   first: bigint
   /** Range to eventually fetch */
@@ -62,7 +67,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
   count: bigint
 
   /** The accounts to fetch storage data for */
-  accounts: Buffer[]
+  storageRequests: StorageRequest[]
 
   /**
    * Create new storage fetcher
@@ -73,9 +78,9 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     this.root = options.root
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
-    this.accounts = options.accounts
+    this.storageRequests = options.storageRequests
 
-    if (this.accounts.length > 0) {
+    if (this.storageRequests.length > 0) {
       const fullJob = { task: { first: this.first, count: this.count } } as Job<
         JobTask,
         StorageData[],
@@ -89,7 +94,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
           origin
         )} limit=${short(limit)} destroyWhenDone=${this.destroyWhenDone}`
       )
-    } else if (this.accounts.length === 0) {
+    } else if (this.storageRequests.length === 0) {
       this.debug('Idle storage fetcher has been instantiated')
     }
   }
@@ -171,13 +176,14 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
 
     this.debug(`'dgb1: inside request function of storage fetcher`)
     this.debug(`root is ${bufferToHex(this.root)}`)
-    this.debug(`account is ${bufferToHex(task.account)}`)
+    this.debug(`storageRequest.storageRoot is ${bufferToHex(task.storageRequests.storageRoot)}`)
+    this.debug(`storageRequest.accountHash is ${bufferToHex(task.storageRequests.accountHash)}`)
     this.debug(`origin is ${bufferToHex(origin)}`)
     this.debug(`limit is ${bufferToHex(limit)}`)
 
     const rangeResult = await peer!.snap!.getStorageRanges({
       root: this.root,
-      accounts: [task.account],
+      accounts: [task.storageRequests.accountHash],
       origin,
       limit,
       bytes: BigInt(100000),
@@ -202,10 +208,14 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
       try {
         // verifyRangeProof will also verify validate there are no missed states between origin and
         // response data
-        const isMissingRightRange = await this.verifyRangeProof(this.root, origin, {
-          slots: rangeResult.slots[0],
-          proof: rangeResult.proof,
-        })
+        const isMissingRightRange = await this.verifyRangeProof(
+          task.storageRequests.storageRoot,
+          origin,
+          {
+            slots: rangeResult.slots[0],
+            proof: rangeResult.proof,
+          }
+        )
 
         // Check if there is any pending data to be synced to the right
         this.debug('dbg10')
@@ -225,9 +235,9 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
           completed = true
           this.debug('dbg13')
 
-          const shift = this.accounts.shift()
+          const shift = this.storageRequests.shift()
           console.log(shift)
-          console.log(this.accounts.length)
+          console.log(this.storageRequests.length)
           console.log(this.in.length)
           this.debug('dbg14')
         }
@@ -278,10 +288,10 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
    * @param numberList List of block numbers
    * @param min Start block number
    */
-  enqueueByAccountList(accountList: Buffer[]) {
-    this.accounts.push(...accountList)
+  enqueueByStorageRequestList(storageRequestList: StorageRequest[]) {
+    this.storageRequests.push(...storageRequestList)
 
-    this.debug(`Number of accounts added to fetcher queue: ${accountList.length}`)
+    this.debug(`Number of accounts added to fetcher queue: ${storageRequestList.length}`)
     if (this.in.length === 0) {
       this.nextTasks()
     }
@@ -303,16 +313,16 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     const startedWith = first
 
     // track the first account and remove it when fetch is complete
-    const accountRequested = this.accounts[0]
+    const storageRequest = this.storageRequests[0]
 
     while (count >= BigInt(max) && tasks.length < maxTasks) {
-      tasks.push({ account: accountRequested!, first, count: max })
+      tasks.push({ storageRequests: storageRequest!, first, count: max })
       first += BigInt(max)
       count -= BigInt(max)
       pushedCount += BigInt(max)
     }
     if (count > BigInt(0) && tasks.length < maxTasks) {
-      tasks.push({ account: accountRequested!, first, count })
+      tasks.push({ storageRequests: storageRequest!, first, count })
       first += BigInt(count)
       pushedCount += count
       count = BigInt(0)
@@ -334,7 +344,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
 
   nextTasks(): void {
     this.debug('dbg2')
-    if (this.accounts.length > 0 && this.in.length === 0 && this.count > BigInt(0)) {
+    if (this.storageRequests.length > 0 && this.in.length === 0 && this.count > BigInt(0)) {
       const fullJob = { task: { first: this.first, count: this.count } } as Job<
         JobTask,
         StorageData[],

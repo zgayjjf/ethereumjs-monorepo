@@ -35,7 +35,7 @@ export interface StorageFetcherOptions extends FetcherOptions {
   /** Account hashes of the storage tries to serve - Currently only able to fetch a single account's storage */
   storageRequests: StorageRequest[]
 
-  /** Storage slot hash of the first to retrieve - Ignored if multiple accounts are requested */
+  /** Storage slot hash of the first to retrieve - Ignored if multiple or no accounts are requested */
   first: bigint
 
   /** Range to eventually fetch - Ignored if multiple accounts are requested */
@@ -125,9 +125,10 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
       const trie = new Trie({ db: new LevelDB() })
       const keys = slots.map((slot: any) => slot.hash)
       const values = slots.map((slot: any) => slot.body)
-      this.debug(JSON.stringify(keys))
-      this.debug(JSON.stringify(values))
-      this.debug(JSON.stringify(proof))
+      // this.debug(JSON.stringify(keys))
+      // this.debug(JSON.stringify(values))
+      // this.debug(JSON.stringify(proof))
+
       // convert the request to the right values
       return await trie.verifyRangeProof(
         stateRoot,
@@ -218,23 +219,16 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
         )
 
         // Check if there is any pending data to be synced to the right
-        this.debug('dbg10')
         let completed: boolean
         if (isMissingRightRange) {
-          this.debug('dbg11')
-
           this.debug(
             `Peer ${peerInfo} returned missing right range Slot=${rangeResult.slots[0][
               rangeResult.slots.length - 1
             ].hash.toString('hex')} limit=${limit.toString('hex')}`
           )
-          this.debug('dbg12')
-
           completed = false
         } else {
           completed = true
-          this.debug('dbg13')
-
           const shift = this.storageRequests.shift()
           console.log(shift)
           console.log(this.storageRequests.length)

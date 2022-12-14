@@ -10,6 +10,21 @@ import type { SynchronizerOptions } from './sync'
 import { StorageFetcher } from './fetcher/storagefetcher'
 import { keccak256 } from 'ethereum-cryptography/keccak'
 
+import {
+  Address,
+  KECCAK256_RLP,
+  KECCAK256_RLP_ARRAY,
+  TypeOutput,
+  arrToBufArr,
+  bigIntToBuffer,
+  bigIntToHex,
+  bigIntToUnpaddedBuffer,
+  bufArrToArr,
+  bufferToBigInt,
+  bufferToHex,
+} from '@ethereumjs/util'
+import { buffer } from 'stream/consumers'
+
 interface SnapSynchronizerOptions extends SynchronizerOptions {}
 
 export class SnapSynchronizer extends Synchronizer {
@@ -107,33 +122,21 @@ export class SnapSynchronizer extends Synchronizer {
       )
     }
 
-    // FETCH PHASE
-    // this.fetcher = new AccountFetcher({
-    //   config: this.config,
-    //   pool: this.pool,
-    //   root: stateRoot,
-    //   stateManager: this.stateManager,
-    //   // This needs to be determined from the current state of the MPT dump
-    //   first: BigInt(1), // why isn't this defaulting to 0?
-    // })
+    const address = Buffer.from('A0284053EFa70E4E15b371E866C4250118dF21FE', 'hex')
+    const hashedAddress = keccak256(address)
+    const hashAsBigint = bufferToBigInt(Buffer.from(hashedAddress))
+    // console.log('dbg80: hash and integer hash follows')
+    // console.log(bufferToHex(Buffer.from(hashedAddress)))
+    // console.log(hashAsBigint)
 
-    // 0x9907Dd452706A9783e241D7b16e6AD0759AE051E
-    this.fetcher = new StorageFetcher({
+    this.fetcher = new AccountFetcher({
       config: this.config,
       pool: this.pool,
       root: stateRoot,
-      accounts: [
-        // Buffer.from(keccak256(
-        //   // new Uint8Array(
-        //     Buffer.from("9907Dd452706A9783e241D7b16e6AD0759AE051E", "hex")
-        //   // )
-        // ))
-        Buffer.from(''),
-      ],
-      first: BigInt(1),
-    }) as any
-
-    // HEAL PHASE
+      // stateManager: this.stateManager,
+      // This needs to be determined from the current state of the MPT dump
+      first: hashAsBigint - BigInt(5000), // why isn't this defaulting to 0?
+    })
 
     return true
   }

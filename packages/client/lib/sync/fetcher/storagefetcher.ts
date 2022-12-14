@@ -1,3 +1,6 @@
+import { debug as createDebugLogger } from 'debug'
+import type { Debugger } from 'debug'
+
 import { Trie } from '@ethereumjs/trie'
 import {
   accountBodyToRLP,
@@ -54,6 +57,8 @@ export type JobTask = {
 }
 
 export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData> {
+  protected debug: Debugger
+
   /**
    * The stateRoot for the fetcher which sorts of pin it to a snapshot.
    * This might eventually be removed as the snapshots are moving and not static
@@ -79,6 +84,7 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
     this.storageRequests = options.storageRequests
+    this.debug = createDebugLogger('client:StorageFetcher')
 
     if (this.storageRequests.length > 0) {
       const fullJob = { task: { first: this.first, count: this.count } } as Job<
@@ -349,7 +355,10 @@ export class StorageFetcher extends Fetcher<JobTask, StorageData[], StorageData>
 
       this.debug(`Fetcher pending with origin=${short(origin)} limit=${short(limit)}`)
       const tasks = this.tasks()
+      this.debug(`dbg0`)
+      this.debug(this.in.length)
       for (const task of tasks) {
+        this.debug(`dbg1`)
         this.enqueueTask(task)
       }
     }

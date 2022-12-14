@@ -1,3 +1,6 @@
+import { debug as createDebugLogger } from 'debug'
+import type { Debugger } from 'debug'
+
 import { Trie } from '@ethereumjs/trie'
 import {
   Account,
@@ -54,6 +57,8 @@ export type JobTask = {
 }
 
 export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData> {
+  protected debug: Debugger
+
   /**
    * The stateRoot for the fetcher which sorts of pin it to a snapshot.
    * This might eventually be removed as the snapshots are moving and not static
@@ -84,6 +89,7 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     this.root = options.root
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
+    this.debug = createDebugLogger('client:AccountFetcher')
 
     this.storageFetcher = new StorageFetcher({
       config: this.config,
@@ -218,11 +224,8 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
         // also need storageRoot of account to be passed into storage fetcher
 
         // queue accounts that have a storage component to them for storage fetching
-        // TODO we need to check convertSlimBody setting here and convert accordingly
         const storageFetchRequests: StorageRequest[] = []
         for (const account of rangeResult.accounts) {
-          // const account = Account.fromAccountData(accountData.body as any)
-
           // this.debug(`dbg30`)
           // this.debug(JSON.stringify(accountData.body))
           // this.debug(`${bufferToHex(accountBodyFromSlim(accountData.body) as any)}`)

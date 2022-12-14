@@ -82,7 +82,6 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     // this.stateManager = options.stateManager
 
     this.root = options.root
-    console.log(`dbg32: ${options.first}`)
     this.first = options.first
     this.count = options.count ?? BigInt(2) ** BigInt(256) - this.first
 
@@ -151,8 +150,6 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     const { task, partialResult } = job
     const { first } = task
     // Snap protocol will automatically pad it with 32 bytes left, so we don't need to worry
-    console.log(`dbg31: ${first}`)
-    console.log(`dbg31: ${bufferToHex(bigIntToBuffer(first))}`)
     const origin = partialResult
       ? bigIntToBuffer(bufferToBigInt(partialResult[partialResult.length - 1].hash) + BigInt(1))
       : bigIntToBuffer(first)
@@ -179,6 +176,12 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
     const { peer } = job
     const origin = this.getOrigin(job)
     const limit = this.getLimit(job)
+
+    console.log(`dbg100: follows root, origin, limit, and bytes`)
+    console.log(bufferToHex(this.root))
+    console.log(bufferToHex(origin))
+    console.log(bufferToHex(limit))
+    console.log(BigInt(this.config.maxRangeBytes))
 
     const rangeResult = await peer!.snap!.getAccountRange({
       root: this.root,
@@ -216,21 +219,31 @@ export class AccountFetcher extends Fetcher<JobTask, AccountData[], AccountData>
 
         // queue accounts that have a storage component to them for storage fetching
         // TODO we need to check convertSlimBody setting here and convert accordingly
-        const storageAccounts: StorageRequest[] = []
-        for (const accountData of rangeResult.accounts) {
-          const account = Account.fromAccountData(accountData.body as any)
-          this.debug(`dbg30: ${account.storageRoot.compare(KECCAK256_RLP)}`)
-          this.debug(`dbg30: ${bufferToHex(KECCAK256_RLP)}`)
-          this.debug(`dbg30: ${bufferToHex(account.storageRoot)}`)
+        const storageFetchRequests: StorageRequest[] = []
+        for (const account of rangeResult.accounts) {
+          // const account = Account.fromAccountData(accountData.body as any)
 
-          if (account.storageRoot.compare(KECCAK256_RLP) !== 0) {
-            storageAccounts.push({
-              accountHash: accountData.hash,
-              storageRoot: account.storageRoot,
+          // this.debug(`dbg30`)
+          // this.debug(JSON.stringify(accountData.body))
+          // this.debug(`${bufferToHex(accountBodyFromSlim(accountData.body) as any)}`)
+          // this.debug(bufferToHex(accountData.body[0]))
+          // this.debug(bufferToHex(accountData.body[1]))
+          // this.debug(bufferToHex(accountData.body[2] as any))
+          // this.debug(bufferToHex(accountData.body[3] as any))
+
+          const storageRoot: Buffer = account.body[2] as Buffer
+          // this.debug(`dbg30: ${(storageRoot as Buffer).compare(KECCAK256_RLP)}`)
+          // this.debug(`dbg30: ${bufferToHex(KECCAK256_RLP)}`)
+          // this.debug(`dbg30: ${bufferToHex(storageRoot)}`)
+
+          if (storageRoot.compare(KECCAK256_RLP) !== 0) {
+            storageFetchRequests.push({
+              accountHash: account.hash,
+              storageRoot: storageRoot,
             })
           }
         }
-        this.storageFetcher.enqueueByStorageRequestList(storageAccounts) // TODO have to redesign task functions to be able to enqueue a single task here
+        this.storageFetcher.enqueueByStorageRequestList(storageFetchRequests) // TODO have to redesign task functions to be able to enqueue a single task here
 
         return Object.assign([], rangeResult.accounts, { completed })
       } catch (err) {

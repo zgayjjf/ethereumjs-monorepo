@@ -475,7 +475,7 @@ tape('blockchain test', (t) => {
     st.end()
   })
 
-  t.test('should test nil bodies / throw', async (st) => {
+  t.test('getBlock with nil body', async (st) => {
     const blocks = generateBlocks(3)
     const blockchain = await Blockchain.create({
       validateBlocks: false,
@@ -498,6 +498,39 @@ tape('blockchain test', (t) => {
     } catch (e) {
       st.pass('block not constructed from empty bodies')
     }
+    st.end()
+  })
+
+  t.test('getBlock nil bodies validation', async (st) => {
+    const blocks = generateBlocks(2)
+    const blockchain = await Blockchain.create({
+      validateBlocks: false,
+      validateConsensus: false,
+      genesisBlock: blocks[0],
+    })
+
+    const common = blocks[1]._common.copy()
+    common.setHardfork(Hardfork.Shanghai)
+    let shanghaiHeader = BlockHeader.fromHeaderData({}, { common })
+    const body = await blockchain.dbManager['getBodyWithEmptyHandled'](
+      shanghaiHeader,
+      shanghaiHeader.hash(),
+      shanghaiHeader.number
+    )
+    st.equal(body.length, 3, 'should get 3 bodies')
+
+    shanghaiHeader = BlockHeader.fromHeaderData({ withdrawalsRoot: Buffer.alloc(32) }, { common })
+    try {
+      await blockchain.dbManager['getBodyWithEmptyHandled'](
+        shanghaiHeader,
+        shanghaiHeader.hash(),
+        shanghaiHeader.number
+      )
+      st.fail('should have failed as non zero withdrawals')
+    } catch (e) {
+      st.pass('correctly fails as expected withdrawals')
+    }
+
     st.end()
   })
 

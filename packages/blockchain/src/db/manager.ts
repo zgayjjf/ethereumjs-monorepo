@@ -106,9 +106,29 @@ export class DBManager {
     }
 
     const header = await this.getHeader(hash, number)
+    const body = await this.getBodyWithEmptyHandled(header, hash, number)
+
+    const blockData = [header.raw(), ...body] as BlockBuffer
+    const opts: BlockOptions = { common: this._common }
+    if (number === BigInt(0)) {
+      opts.hardforkByTTD = await this.getTotalDifficulty(hash, BigInt(0))
+    } else {
+      opts.hardforkByTTD = await this.getTotalDifficulty(header.parentHash, number - BigInt(1))
+    }
+    return Block.fromValuesArray(blockData, opts)
+  }
+
+  /**
+   * Fetches body of a block with construction from nil bodies handled
+   */
+  private async getBodyWithEmptyHandled(
+    header: BlockHeader,
+    blockHash: Buffer,
+    blockNumber: bigint
+  ): Promise<BlockBodyBuffer> {
     let body: BlockBodyBuffer
     try {
-      body = await this.getBody(hash, number)
+      body = await this.getBody(blockHash, blockNumber)
     } catch (error: any) {
       if (error.code !== 'LEVEL_NOT_FOUND') {
         throw error
@@ -131,15 +151,7 @@ export class DBManager {
         body.push([])
       }
     }
-
-    const blockData = [header.raw(), ...body] as BlockBuffer
-    const opts: BlockOptions = { common: this._common }
-    if (number === BigInt(0)) {
-      opts.hardforkByTTD = await this.getTotalDifficulty(hash, BigInt(0))
-    } else {
-      opts.hardforkByTTD = await this.getTotalDifficulty(header.parentHash, number - BigInt(1))
-    }
-    return Block.fromValuesArray(blockData, opts)
+    return body
   }
 
   /**

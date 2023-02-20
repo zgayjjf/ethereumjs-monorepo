@@ -26,7 +26,7 @@ This release supports an experimental version of the blob transaction type intro
 
 #### Initialization
 
-To create blocks which include blob transactions you have to active EIP-4844 in the associated `@ethereumjs/common` library:
+To create blocks which include blob transactions you have to activate EIP-4844 in the associated `@ethereumjs/common` library:
 
 ```typescript
 import { Common, Chain, Hardfork } from '@ethereumjs/common'

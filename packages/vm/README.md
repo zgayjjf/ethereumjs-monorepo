@@ -210,7 +210,7 @@ This library supports an experimental version of the blob transaction type intro
 
 #### Initialization
 
-To run VM/EVM related EIP-4844 functionality you have to active the EIP in the associated `@ethereumjs/common` library:
+To run VM/EVM related EIP-4844 functionality you have to activate the EIP in the associated `@ethereumjs/common` library:
 
 ```typescript
 import { Common, Chain, Hardfork } from '@ethereumjs/common'
